@@ -7,12 +7,13 @@ import SettingIntroBanner from 'dashboard/components/widgets/SettingIntroBanner.
 import SettingsSection from '../../../../components/SettingsSection.vue';
 import inboxMixin from 'shared/mixins/inboxMixin';
 import FacebookReauthorize from './facebook/Reauthorize.vue';
+import MicrosoftReauthorize from './channels/microsoft/Reauthorize.vue';
+import GoogleReauthorize from './channels/google/Reauthorize.vue';
 import PreChatFormSettings from './PreChatForm/Settings.vue';
 import WeeklyAvailability from './components/WeeklyAvailability.vue';
 import GreetingsEditor from 'shared/components/GreetingsEditor.vue';
 import ConfigurationPage from './settingsPage/ConfigurationPage.vue';
 import CollaboratorsPage from './settingsPage/CollaboratorsPage.vue';
-import MicrosoftReauthorize from './channels/microsoft/Reauthorize.vue';
 import WidgetBuilder from './WidgetBuilder.vue';
 import BotConfiguration from './components/BotConfiguration.vue';
 import UnoapiConfiguration from './settingsPage/UnoapiConfiguration.vue';
@@ -34,6 +35,7 @@ export default {
     SenderNameExamplePreview,
     MicrosoftReauthorize,
     UnoapiConfiguration,
+    GoogleReauthorize,
   },
   mixins: [inboxMixin],
   setup() {
@@ -63,6 +65,7 @@ export default {
       selectedTabIndex: 0,
       selectedPortalSlug: '',
       showBusinessNameInput: false,
+      externalToken: '',
     };
   },
   computed: {
@@ -190,7 +193,7 @@ export default {
     },
     canLocktoSingleConversation() {
       return (
-        this.isASmsInbox || this.isAWhatsAppChannel || this.isAFacebookInbox
+        this.isASmsInbox || this.isAWhatsAppChannel || this.isAFacebookInbox || this.isAPIInbox
       );
     },
     inboxNameLabel() {
@@ -219,6 +222,19 @@ export default {
     },
     facebookUnauthorized() {
       return this.isAFacebookInbox && this.inbox.reauthorization_required;
+    },
+    googleUnauthorized() {
+      const isLegacyInbox = ['imap.gmail.com', 'imap.google.com'].includes(
+        this.inbox.imap_address
+      );
+
+      return (
+        (this.isAGoogleInbox || isLegacyInbox) &&
+        this.inbox.reauthorization_required
+      );
+    },
+    isWavoipFeatureEnabled() {
+      return this.isFeatureEnabledonAccount(this.accountId, FEATURE_FLAGS.WAVOIP);
     },
   },
   watch: {
@@ -262,6 +278,7 @@ export default {
         this.avatarUrl = this.inbox.avatar_url;
         this.selectedInboxName = this.inbox.name;
         this.webhookUrl = this.inbox.webhook_url;
+        this.externalToken = this.inbox.external_token;
         this.greetingEnabled = this.inbox.greeting_enabled || false;
         this.greetingMessage = this.inbox.greeting_message || '';
         this.emailCollectEnabled = this.inbox.enable_email_collect;
@@ -302,6 +319,7 @@ export default {
           lock_to_single_conversation: this.locktoSingleConversation,
           sender_name_type: this.senderNameType,
           business_name: this.businessName || null,
+          external_token: this.externalToken || '',
           channel: {
             widget_color: this.inbox.widget_color,
             website_url: this.channelWebsiteUrl,
@@ -311,6 +329,7 @@ export default {
             selectedFeatureFlags: this.selectedFeatureFlags,
             reply_time: this.replyTime || 'in_a_few_minutes',
             continuity_via_email: this.continuityViaEmail,
+            external_token: this.externalToken || '',
           },
         };
         if (this.avatarFile) {
@@ -360,6 +379,7 @@ export default {
       shouldBeUrl,
     },
     selectedInboxName: {},
+    externalToken: {},
   },
 };
 </script>
@@ -386,9 +406,9 @@ export default {
         />
       </woot-tabs>
     </SettingIntroBanner>
-
     <MicrosoftReauthorize v-if="microsoftUnauthorized" :inbox="inbox" />
     <FacebookReauthorize v-if="facebookUnauthorized" :inbox="inbox" />
+    <GoogleReauthorize v-if="googleUnauthorized" :inbox="inbox" />
 
     <div v-if="selectedTabKey === 'inbox_settings'" class="mx-8">
       <SettingsSection
@@ -434,6 +454,15 @@ export default {
               : ''
           "
           @blur="v$.webhookUrl.$touch"
+        />
+        <woot-input
+          v-if="isAPIInbox && isWavoipFeatureEnabled"
+          v-model.trim="externalToken"
+          class="w-3/4 pb-4"
+          :label="$t('INBOX_MGMT.SETTINGS_POPUP.EXTERNAL_TOKEN')"
+          :placeholder="
+            $t('INBOX_MGMT.SETTINGS_POPUP.EXTERNAL_TOKEN_PLACEHOLDER')
+          "
         />
         <woot-input
           v-if="isAWebWidgetInbox"
